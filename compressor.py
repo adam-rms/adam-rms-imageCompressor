@@ -110,8 +110,8 @@ def compressor():
     '''
     s3client = boto3.client('s3',
                             endpoint_url=os.environ['AWS_ENDPOINT_URL'],
-                            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-                            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
+                            aws_access_key_id=os.environ['python__AWS_SERVER_KEY'],
+                            aws_secret_access_key=os.environ['python__AWS_SERVER_SECRET_KEY']
             )
 
     print("[INFO] S3 Connected")
@@ -159,3 +159,5 @@ def compressor():
             print(comp)
             print("[ERROR] Compression Failed")
     print("[INFO] Completed Script")
+
+compressor()

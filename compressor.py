@@ -88,75 +88,74 @@ def compressImage(file_name):
     return images
 
 
+def compressor():
+    print("[INFO] Starting")
 
-print("[INFO] Starting")
+    '''
+        Establish a connection to the Database
+    '''
 
-'''
-    Establish a connection to the Database
-'''
+    dbConnection = pymysql.connect(
+        host=os.environ.get('MYSQL_HOSTNAME'),
+        user=os.environ.get('MYSQL_USER'),
+        passwd=os.environ.get('MYSQL_PASSWORD'),
+        database=os.environ.get('MYSQL_DATABASE')
+    )
 
-dbConnection = pymysql.connect(
-    host=os.environ.get('MYSQL_HOSTNAME'),
-    user=os.environ.get('MYSQL_USER'),
-    passwd=os.environ.get('MYSQL_PASSWORD'),
-    database=os.environ.get('MYSQL_DATABASE')
-)
+    dbCursor = dbConnection.cursor(pymysql.cursors.DictCursor)
+    print("[INFO] DB Connected")
 
-dbCursor = dbConnection.cursor(pymysql.cursors.DictCursor)
-print("[INFO] DB Connected")
+    '''
+        Establish a S3 connection
+    '''
+    s3client = boto3.client('s3',
+                            endpoint_url=os.environ['AWS_ENDPOINT_URL'],
+                            aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+                            aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
+            )
 
-'''
-    Establish a S3 connection
-'''
-s3client = boto3.client('s3',
-                        endpoint_url=os.environ['AWS_ENDPOINT_URL'],
-                        aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-                        aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
-        )
+    print("[INFO] S3 Connected")
 
-print("[INFO] S3 Connected")
-
-print("[INFO] Get files to compress")
-#dbCursor.execute("SELECT s3files_bucket,s3files_path,s3files_filename,s3files_extension,s3files_id,s3files_meta_public FROM s3files WHERE (s3files_compressed = 0 AND s3files_bucket = '" + os.environ['AWS_BUCKET'] + "' AND s3files_extension IN ('jpg','JPG','jpeg','JPEG','png','PNG') AND s3files_meta_deleteOn IS NULL AND s3files_meta_physicallyStored = 1) ORDER BY s3files_id ASC")  # Select everything that needs compressing
-#listOfFiles = dbCursor.fetchall()
-listOfFiles = []
-total = len(listOfFiles)
-print("[INFO] Got file list - " + str(total))
-counter = 0
-for file in listOfFiles:
-    fileKey = str(file['s3files_path']) + "/" + str(file['s3files_filename']) + "." + str(file['s3files_extension'])
-    fileKey = fileKey.replace("\\", "")
-    print("[INFO] Starting " + str((counter/total)*100) + "%: " + str(fileKey) + " | " + str(file['s3files_id']))
-    counter += 1
-    try:
-        s3client.download_file(str(file['s3files_bucket']), fileKey, "image."+str(file['s3files_extension']))
-    except:
-        print("[ERROR] File not found")
-        continue
-    comp = compressImage(fileKey)
-    if comp and len(comp) > 4:
-        mimetype, _ = mimetypes.guess_type("image."+str(file['s3files_extension']))
-        if mimetype is None:
-            mimetype = "binary/octet-stream"
-        os.remove("image."+str(file['s3files_extension']))
-        extraArgs = {'ContentType': mimetype}
-        if file['s3files_meta_public'] == 1:
-            extraArgs.update({'ACL':'public-read'})
-        success = True
-        for type,upload in comp.items():
-            try:
-                s3client.upload_file(type+"."+str(file['s3files_extension']), str(file['s3files_bucket']), upload,ExtraArgs=extraArgs)
-            except boto3.exceptions.S3UploadFailedError:
-                print("[ERROR] Failed to upload comp file")
-                success = False
-            os.remove(type+"."+str(file['s3files_extension']))
-        if success:
-            dbCursor.execute("UPDATE s3files SET s3files_compressed = 1 WHERE s3files_id = '" + str(file['s3files_id']) + "'")
-            dbConnection.commit()
-            print("[INFO] Compressed and Uploaded File")
+    print("[INFO] Get files to compress")
+    dbCursor.execute("SELECT s3files_bucket,s3files_path,s3files_filename,s3files_extension,s3files_id,s3files_meta_public FROM s3files WHERE (s3files_compressed = 0 AND s3files_bucket = '" + os.environ['AWS_BUCKET'] + "' AND s3files_extension IN ('jpg','JPG','jpeg','JPEG','png','PNG') AND s3files_meta_deleteOn IS NULL AND s3files_meta_physicallyStored = 1) ORDER BY s3files_id ASC")  # Select everything that needs compressing
+    listOfFiles = dbCursor.fetchall()
+    total = len(listOfFiles)
+    print("[INFO] Got file list - " + str(total))
+    counter = 0
+    for file in listOfFiles:
+        fileKey = str(file['s3files_path']) + "/" + str(file['s3files_filename']) + "." + str(file['s3files_extension'])
+        fileKey = fileKey.replace("\\", "")
+        print("[INFO] Starting " + str((counter/total)*100) + "%: " + str(fileKey) + " | " + str(file['s3files_id']))
+        counter += 1
+        try:
+            s3client.download_file(str(file['s3files_bucket']), fileKey, "image."+str(file['s3files_extension']))
+        except:
+            print("[ERROR] File not found")
+            continue
+        comp = compressImage(fileKey)
+        if comp and len(comp) > 4:
+            mimetype, _ = mimetypes.guess_type("image."+str(file['s3files_extension']))
+            if mimetype is None:
+                mimetype = "binary/octet-stream"
+            os.remove("image."+str(file['s3files_extension']))
+            extraArgs = {'ContentType': mimetype}
+            if file['s3files_meta_public'] == 1:
+                extraArgs.update({'ACL':'public-read'})
+            success = True
+            for type,upload in comp.items():
+                try:
+                    s3client.upload_file(type+"."+str(file['s3files_extension']), str(file['s3files_bucket']), upload,ExtraArgs=extraArgs)
+                except boto3.exceptions.S3UploadFailedError:
+                    print("[ERROR] Failed to upload comp file")
+                    success = False
+                os.remove(type+"."+str(file['s3files_extension']))
+            if success:
+                dbCursor.execute("UPDATE s3files SET s3files_compressed = 1 WHERE s3files_id = '" + str(file['s3files_id']) + "'")
+                dbConnection.commit()
+                print("[INFO] Compressed and Uploaded File")
+            else:
+                print("[ERROR] Failed to compress and upload file")
         else:
-            print("[ERROR] Failed to compress and upload file")
-    else:
-        print(comp)
-        print("[ERROR] Compression Failed")
-print("[INFO] Completed Script")
+            print(comp)
+            print("[ERROR] Compression Failed")
+    print("[INFO] Completed Script")

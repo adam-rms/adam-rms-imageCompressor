@@ -1,6 +1,7 @@
 from PIL import Image
 import functools
 import os.path
+import time
 import boto3
 import pymysql
 import mimetypes
@@ -164,3 +165,6 @@ def compressor():
     print("[INFO] Completed Script")
 
 compressor()
+print("[INFO] Completed Script - waiting a bit")
+time.sleep(os.environ.get('SLEEP_TIME',10))
+print("[INFO] Completed wait - restarting")

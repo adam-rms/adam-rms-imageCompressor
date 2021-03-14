@@ -129,7 +129,8 @@ def compressor():
         counter += 1
         try:
             s3client.download_file(str(file['s3files_bucket']), fileKey, "image."+str(file['s3files_extension']))
-        except:
+        except Exception as e:
+            print(e)
             print("[ERROR] File not found")
             continue
         comp = compressImage(fileKey)
@@ -154,10 +155,12 @@ def compressor():
                 dbConnection.commit()
                 print("[INFO] Compressed and Uploaded File")
             else:
-                print("[ERROR] Failed to compress and upload file")
+                print("[ERROR] Failed to upload file")
         else:
             print(comp)
-            print("[ERROR] Compression Failed")
+            dbCursor.execute("UPDATE s3files SET s3files_compressed = 2 WHERE s3files_id = '" + str(file['s3files_id']) + "'") #Marking it as 2 means it will be skipped - if you keep retrying downloading the same files you just gobble up bandwidth on S3
+            dbConnection.commit()
+            print("[ERROR] Compression Failed - marked as not for compression ")
     print("[INFO] Completed Script")
 
 compressor()

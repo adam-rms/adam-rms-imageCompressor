@@ -150,6 +150,10 @@ def compressor():
                 except boto3.exceptions.S3UploadFailedError:
                     print("[ERROR] Failed to upload comp file")
                     success = False
+                except Exception as e:
+                    print("[ERROR] Failed to upload comp file - hit unknown S3 error")
+                    print(e)
+                    success = False
                 os.remove(type+"."+str(file['s3files_extension']))
             if success:
                 dbCursor.execute("UPDATE s3files SET s3files_compressed = 1 WHERE s3files_id = '" + str(file['s3files_id']) + "'")
